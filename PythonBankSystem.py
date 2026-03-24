@@ -1,9 +1,17 @@
 import os
 import random
+import hashlib
 
 filename = "accountdata.txt"
 
-accounts=[]
+def save_accounts(accounts):
+    with open("temp.txt", "w") as file:
+        for account in accounts:
+            file.write(f"{account['name']},{account['accid']},{account['mpin']},{account['loginpass']},{account['balance']},{account['loginpass_salt']},{account['mpin_salt']}\n")
+    os.replace("temp.txt", filename)
+
+def hash_data(data, salt):
+    return hashlib.sha256(data.encode() + bytes.fromhex(salt)).hexdigest()
 
 def mpin_():
     print("Following are the choices for length of the MPIN.")
@@ -17,6 +25,7 @@ def mpin_():
                 while True:
                     conf = input("Enter your MPIN again to confirm: ")
                     if conf == mpin:
+                        print("MPIN created successfully.")
                         return mpin
                     else:
                         print("MPIN does not match. Try again.")
@@ -84,8 +93,19 @@ def read_accounts():
         with open(filename, "r") as f:
             for line in f.readlines():
                 parts = line.strip().split(",")
-                if len(parts) == 5:
-                    accounts.append({"name": parts[0], "accid": parts[1], "mpin": parts[2], "loginpass": parts[3], "balance": float(parts[4])})
+                if len(parts) != 7:
+                    continue
+                try:
+                    name = parts[0]
+                    accid = parts[1]
+                    mpin = parts[2]
+                    loginpass = parts[3]
+                    balance = float(parts[4])
+                    loginpass_salt = parts[5]
+                    mpin_salt = parts[6]
+                    accounts.append({"name": name,"accid": accid,"mpin": mpin,"loginpass": loginpass,"balance": balance,"loginpass_salt": loginpass_salt,"mpin_salt": mpin_salt})
+                except ValueError:
+                    continue
     return accounts
 print("\n======================================")
 print("     WELCOME TO PYTHON BANK SYSTEM     ")
@@ -111,13 +131,20 @@ while True:
         print("\n--- Create Login Password ---")
         print("You may enter alphabets, numbers or special characters.")
         print("The password must contain 8 to 12 characters only.\n")
-        print("The password must contain an alphabet, a number and a special charater.")
+        print("The password must contain an alphabet, a number and a special charater.\n")
+
+        loginpass_salt = os.urandom(16).hex()
 
         loginpass=login_password()
+        loginpass_hash=hash_data(loginpass,loginpass_salt)
         print("Your password has been created.")
 
+        mpin_salt=os.urandom(16).hex()
+
         print("\n--- Create MPIN ---")
+
         mpin=mpin_()
+        mpin_hash=hash_data(mpin,mpin_salt)
 
         accounts=read_accounts()
 
@@ -131,11 +158,9 @@ while True:
 
         print("Congratulations! Your account has been created.\n")
 
-        accounts.append({"name": name, "accid": accid, "mpin": mpin, "loginpass": loginpass, "balance": balance})
+        accounts.append({"name": name, "accid": accid, "mpin": mpin_hash, "loginpass": loginpass_hash, "balance": balance, "loginpass_salt": loginpass_salt, "mpin_salt": mpin_salt})
 
-        with open(filename, "w") as file:
-            for account in accounts:
-                file.write(f"{account['name']},{account['accid']},{account['mpin']},{account['loginpass']},{account['balance']}\n")
+        save_accounts(accounts)
 
     elif option == "2":
         print("\n===== SHOW ALL ACCOUNTS =====\n")
@@ -166,12 +191,13 @@ while True:
                 print("Invalid choice\n")
             else:
                 choice-=1
-                attempts=3
-                while attempts>0:
+                login_attempts=3
+                while login_attempts>0:
                     loginpass = input("Enter Login Password : ")
-                    if not loginpass == accounts[choice]['loginpass']:
-                        attempts -= 1
-                        print(f"\nIncorrect Login Password. {attempts} attempts left.\n")
+                    stored_salt = accounts[choice]['loginpass_salt']
+                    if not hash_data(loginpass,stored_salt) == accounts[choice]['loginpass']:
+                        login_attempts -= 1
+                        print(f"\nIncorrect Login Password. {login_attempts} attempts left.\n")
                     else:
                         print(f"\nWelcome {accounts[choice]['name']}!\n")
 
@@ -197,124 +223,139 @@ while True:
                             elif accopt == "2":
                                 print("\n--- Withdraw ---")
                                 amount = input_float("Enter amount to withdraw : ")
-                                attempts=3
-                                while attempts>0:
+                                withdraw_attempts=3
+                                while withdraw_attempts>0:
                                     pin = input("Enter your MPIN : ")
-                                    if pin == accounts[choice]['mpin']:
+                                    stored_salt = accounts[choice]['mpin_salt']
+                                    if hash_data(pin,stored_salt) == accounts[choice]['mpin']:
                                         if amount <= accounts[choice]['balance'] and amount>0:
                                             accounts[choice]['balance'] -= amount
-                                            with open(filename, "w") as file:
-                                                for account in accounts:
-                                                    file.write(f"{account['name']},{account['accid']},{account['mpin']},{account['loginpass']},{account['balance']}\n")
+                                            save_accounts(accounts)
                                             print("Withdrawal successful. Your new balance is : ",accounts[choice]['balance'])
                                             break
                                         else:
                                             print("Insufficient balance. Returning to account menu...")
                                             break
                                     else:
-                                        attempts-=1
-                                        print(f"\nIncorrect MPIN. {attempts} attempts left.")
-                                if attempts==0:
+                                        withdraw_attempts-=1
+                                        print(f"\nIncorrect MPIN. {withdraw_attempts} attempts left.")
+                                if withdraw_attempts==0:
                                     print("Too many failed attempts. Returning to account menu...")
                                     continue
 
                             elif accopt == "3":
                                 print("\n--- Deposit ---")
                                 amount = input_float("Enter amount to deposit : ")
-                                attempts=3
-                                while attempts>0:
+                                deposit_attempts=3
+                                while deposit_attempts>0:
                                     pin = input("Enter your MPIN : ")
-                                    if pin == accounts[choice]['mpin']:
+                                    stored_salt = accounts[choice]['mpin_salt']
+                                    if hash_data(pin,stored_salt) == accounts[choice]['mpin']:
                                         if amount > 0:
                                             accounts[choice]['balance'] += amount
-                                            with open(filename, "w") as file:
-                                                for account in accounts:
-                                                    file.write(f"{account['name']},{account['accid']},{account['mpin']},{account['loginpass']},{account['balance']}\n")
+                                            save_accounts(accounts)
                                             print("Deposit successful. Your new balance is : ",accounts[choice]['balance'])
                                             break
                                         else:
                                             print("Please enter an amount greater than 0. Returning to account menu...")
                                             break
                                     else:
-                                        attempts-=1
-                                        print(f"\nIncorrect MPIN. {attempts} attempts left.")
-                                if attempts==0:
+                                        deposit_attempts-=1
+                                        print(f"\nIncorrect MPIN. {deposit_attempts} attempts left.")
+                                if deposit_attempts==0:
                                     print("Too many failed attempts. Returning to account menu...")
                                     continue
 
                             elif accopt == "4":
                                 print("\n--- Change MPIN ---")
-                                attempts=3
-                                while attempts>0:
+                                changempin_attempts=3
+                                while changempin_attempts>0:
                                     pin = input("Enter your current MPIN : ")
-                                    if pin == accounts[choice]['mpin']:
-                                        newmpin=mpin_()
+                                    stored_salt = accounts[choice]['mpin_salt']
+                                    if hash_data(pin,stored_salt) == accounts[choice]['mpin']:
+                                        new_salt = os.urandom(16).hex()
+                                        newmpin = mpin_()
+                                        newmpin=hash_data(newmpin,new_salt)
                                         accounts[choice]['mpin'] = newmpin
-                                        with open(filename, "w") as file:
-                                            for account in accounts:
-                                                file.write(f"{account['name']},{account['accid']},{account['mpin']},{account['loginpass']},{account['balance']}\n")
+                                        accounts[choice]['mpin_salt']=new_salt
+                                        save_accounts(accounts)
                                         print("\nMPIN changed successfully.")
                                         break
                                     else:
-                                        attempts-=1
-                                        print(f"\nIncorrect MPIN. {attempts} attempts left.")
-                                if attempts==0:
+                                        changempin_attempts-=1
+                                        print(f"\nIncorrect MPIN. {changempin_attempts} attempts left.")
+                                if changempin_attempts==0:
                                     print("Too many failed attempts. Returning to account menu...")
                                     continue
 
                             elif accopt == "5":
                                 print("\n--- Change Login Password ---")
-                                attempts=3
-                                while attempts>0:
+                                changeloginpass_attempts=3
+                                while changeloginpass_attempts>0:
                                     login = input("\nEnter your current Login Password : ")
-                                    if login == accounts[choice]['loginpass']:
+                                    stored_salt = accounts[choice]['loginpass_salt']
+                                    if hash_data(login,stored_salt) == accounts[choice]['loginpass']:
                                         print("\nYou may enter alphabets, numbers or special characters.")
                                         print("The password must contain 8 to 12 characters only.")
                                         print("The password must contain an alphabet, a number and a special character.")
-                                        loginpass=login_password()
+                                        new_salt = os.urandom(16).hex()
+                                        loginpass = login_password()
+                                        loginpass=hash_data(loginpass,new_salt)
                                         accounts[choice]['loginpass'] = loginpass
-                                        with open(filename, "w") as file:
-                                            for account in accounts:
-                                                file.write(f"{account['name']},{account['accid']},{account['mpin']},{account['loginpass']},{account['balance']}\n")
+                                        accounts[choice]['loginpass_salt'] = new_salt
+                                        save_accounts(accounts)
                                         print("\nLogin Password changed successfully.")
                                         break
                                     else:
-                                        attempts-=1
-                                        print(f"\nIncorrect Login Password. {attempts} attempts left.")
-                                if attempts==0:
-                                    print("Too many failedattempts. Returning to account menu.")
+                                        changeloginpass_attempts-=1
+                                        print(f"\nIncorrect Login Password. {changeloginpass_attempts} attempts left.")
+                                if changeloginpass_attempts==0:
+                                    print("Too many failed attempts. Returning to account menu.")
                                     continue
 
                             elif accopt == "6":
                                 print("\n--- Delete Account ---")
-                                attempts=3
-                                while attempts>0:
+                                delaccount_attempts=3
+                                while delaccount_attempts>0:
                                     pin = input("\nEnter your MPIN : ")
-                                    if pin == accounts[choice]['mpin']:
+                                    stored_salt = accounts[choice]['mpin_salt']
+                                    if hash_data(pin,stored_salt) == accounts[choice]['mpin']:
+                                        break
+                                    else:
+                                        delaccount_attempts-=1
+                                        print(f"Incorrect MPIN. {delaccount_attempts} attempts left.\n")
+                                        print("Account not deleted.\n")
+                                if delaccount_attempts==0:
+                                    print("Too many failed attempts. Returning to account menu...")
+                                    continue
+
+                                delaccount_attempts=3
+                                while delaccount_attempts>0:
+                                    login = input("Enter your Login Password : ")
+                                    stored_salt = accounts[choice]['loginpass_salt']
+                                    if hash_data(login,stored_salt) == accounts[choice]['loginpass']:
                                         confirm = input("\nAre you sure you want to delete this account? (y/n): ").lower()
-                                        if confirm in ("y", "yes"):
+                                        if confirm in ("y","yes"):
                                             displayname = accounts[choice]['name']
                                             del accounts[choice]
-                                            with open(filename, "w") as file:
-                                                for account in accounts:
-                                                    file.write(f"{account['name']},{account['accid']},{account['mpin']},{account['loginpass']},{account['balance']}\n")
-                                                print("Account", displayname, "deleted.\n")
+                                            save_accounts(accounts)
+                                            print("Account", displayname, "deleted.\n")
                                             deleted=True
                                             break
-                                        elif confirm in ("n", "no"):
+                                        elif confirm in ("n","no"):
                                             print("Cancelled")
+                                            break
                                         else:
                                             print("Invalid input")
                                     else:
-                                        attempts-=1
-                                        print(f"Incorrect MPIN. {attempts} attempts left.\n")
-                                        print("Account not deleted.\n")
+                                        delaccount_attempts-=1
+                                        print(f"Incorrect Login Password. {delaccount_attempts} attempts left.\n")
                                 if deleted:
                                     break
-                                if attempts == 0:
+                                if delaccount_attempts==0:
                                     print("Too many failed attempts. Returning to account menu...")
                                 else:
-                                    break
+                                    continue
 
                             elif accopt == "7":
                                 print("\nThank you for using the Python Bank System. Logging out...\n")
@@ -323,7 +364,7 @@ while True:
                             else:
                                 print("Invalid option. Try again.\n")
                         break
-                if attempts == 0:
+                if login_attempts == 0:
                     print("Too many failed attempts. Returning to main menu...\n")
                     continue
 
