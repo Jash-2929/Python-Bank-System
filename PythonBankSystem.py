@@ -207,8 +207,37 @@ while True:
             print("\nAccount is permanently locked.")
             print("Recover your account by resetting credentials.\n")
 
-            newpass = login_password()
-            newpin = mpin_()
+            attempts=3
+            while attempts > 0:
+                lp = input("Enter your current Login Password : ")
+                if hash_data(lp, acc[5]) != acc[3]:
+                    attempts -= 1
+                    print(f"\nIncorrect Login Password. {attempts} attempts left.\n")
+                else:
+                    attempts=3
+                    break
+
+            if attempts == 0:
+                cursor.execute("UPDATE accounts SET perm_lock=1 WHERE accid=?", (acc[1],))
+                conn.commit()
+                print("Too many incorrect attempts. Account permanently locked.\n")
+                continue
+
+            while attempts > 0:
+                mp = input("Enter your current MPIN : ")
+                if hash_data(mp, acc[6]) != acc[2]:
+                    attempts -= 1
+                    print(f"\nIncorrect MPIN. {attempts} attempts left.\n")
+                else:
+                    newpass=login_password()
+                    newpin = mpin_()
+                    break
+
+            if attempts == 0:
+                cursor.execute("UPDATE accounts SET perm_lock=1 WHERE accid=?", (acc[1],))
+                conn.commit()
+                print("Too many incorrect attempts. Account permanently locked.\n")
+                continue
 
             new_salt1 = os.urandom(16).hex()
             new_salt2 = os.urandom(16).hex()
@@ -237,10 +266,22 @@ while True:
         if attempts == 0:
             cursor.execute("UPDATE accounts SET perm_lock=1 WHERE accid=?", (acc[1],))
             conn.commit()
-            print("Too many attempts. Account permanently locked.\n")
+            print("Too many incorrect attempts. Account permanently locked.\n")
             continue
 
         print(f"\nWelcome {acc[0]}!\n")
+
+        cursor.execute("SELECT * FROM accounts WHERE accid=?", (acc[1],))
+        acc = cursor.fetchone()
+
+        if acc[7] > time.time():
+            remain = int(acc[7] - time.time())
+            print(f"\nAccount temporarily locked. Try again in {remain} seconds.\n")
+            break
+
+        if acc[8] == 1:
+            print("Account permanently locked. Logging out.\n")
+            break
 
         while True:
             print("===== ACCOUNT MENU =====\n")
@@ -255,13 +296,6 @@ while True:
             print("9. Logout\n")
 
             opt = input("Choose an option: ")
-
-            cursor.execute("SELECT * FROM accounts WHERE accid=?", (acc[1],))
-            acc = cursor.fetchone()
-
-            if acc[8] == 1:
-                print("Account permanently locked. Logging out.\n")
-                break
 
             if opt == "1":
                 print("\n--- Account Details ---")
@@ -289,8 +323,14 @@ while True:
                     else:
                         a -= 1
                         print(f"\nIncorrect MPIN. {a} attempts left.")
+                        if a == 0:
+                            lock_time = time.time() + 60
+                            cursor.execute("UPDATE accounts SET temp_lock_until=? WHERE accid=?", (lock_time, acc[1]))
+                            conn.commit()
+                            print("Too many failed attempts. Returning to account menu...\n")
+                            print("Account temporarily locked for 60 seconds.\n")
                 if a == 0:
-                    print("Too many failed attempts. Returning to account menu...\n")
+                    break
 
             elif opt == "3":
                 print("\n--- Deposit ---")
@@ -312,8 +352,14 @@ while True:
                     else:
                         a -= 1
                         print(f"\nIncorrect MPIN. {a} attempts left.")
+                        if a == 0:
+                            lock_time = time.time() + 60
+                            cursor.execute("UPDATE accounts SET temp_lock_until=? WHERE accid=?", (lock_time, acc[1]))
+                            conn.commit()
+                            print("Too many failed attempts. Returning to account menu...\n")
+                            print("Account temporarily locked for 60 seconds.\n")
                 if a == 0:
-                    print("Too many failed attempts. Returning to account menu...\n")
+                    break
 
             elif opt == "4":
                 print("\n--- Transfer Money ---")
@@ -351,9 +397,15 @@ while True:
                     else:
                         a -= 1
                         print(f"\nIncorrect MPIN. {a} attempts left.")
+                        if a == 0:
+                            lock_time = time.time() + 60
+                            cursor.execute("UPDATE accounts SET temp_lock_until=? WHERE accid=?", (lock_time, acc[1]))
+                            conn.commit()
+                            print("Too many failed attempts. Returning to account menu...\n")
+                            print("Account temporarily locked for 60 seconds.\n")
 
                 if a == 0:
-                    print("Too many failed attempts.\n")
+                    break
 
             elif opt == "5":
                 print("\n--- Transaction History ---\n")
@@ -384,8 +436,14 @@ while True:
                     else:
                         a -= 1
                         print(f"\nIncorrect MPIN. {a} attempts left.")
+                        if a == 0:
+                            lock_time = time.time() + 60
+                            cursor.execute("UPDATE accounts SET temp_lock_until=? WHERE accid=?", (lock_time, acc[1]))
+                            conn.commit()
+                            print("Too many failed attempts. Returning to account menu...\n")
+                            print("Account temporarily locked for 60 seconds.\n")
                 if a == 0:
-                    print("Too many failed attempts.\n")
+                    break
 
             elif opt == "7":
                 print("\n--- Change Login Password ---")
@@ -403,8 +461,14 @@ while True:
                     else:
                         a -= 1
                         print(f"\nIncorrect Login Password. {a} attempts left.")
+                        if a == 0:
+                            lock_time = time.time() + 60
+                            cursor.execute("UPDATE accounts SET temp_lock_until=? WHERE accid=?", (lock_time, acc[1]))
+                            conn.commit()
+                            print("Too many failed attempts. Returning to account menu...\n")
+                            print("Account temporarily locked for 60 seconds.\n")
                 if a == 0:
-                    print("Too many failed attempts.\n")
+                    break
 
             elif opt == "8":
                 print("\n--- Delete Account ---")
@@ -416,10 +480,15 @@ while True:
                     else:
                         a -= 1
                         print(f"Incorrect MPIN. {a} attempts left.\n")
+                        if a == 0:
+                            lock_time = time.time() + 60
+                            cursor.execute("UPDATE accounts SET temp_lock_until=? WHERE accid=?", (lock_time, acc[1]))
+                            conn.commit()
+                            print("Too many failed attempts. Returning to account menu...\n")
+                            print("Account temporarily locked for 60 seconds.\n")
 
                 if a == 0:
-                    print("Too many failed attempts.\n")
-                    continue
+                    break
 
                 a = 3
                 while a > 0:
@@ -441,6 +510,14 @@ while True:
                     else:
                         a -= 1
                         print(f"Incorrect Login Password. {a} attempts left.\n")
+                        if a == 0:
+                            lock_time = time.time() + 60
+                            cursor.execute("UPDATE accounts SET temp_lock_until=? WHERE accid=?", (lock_time, acc[1]))
+                            conn.commit()
+                            print("Too many failed attempts. Returning to account menu...\n")
+                            print("Account temporarily locked for 60 seconds.\n")
+                if a == 0:
+                    break
 
                 break
 
